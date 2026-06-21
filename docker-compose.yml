@@ -1,0 +1,25 @@
+services:
+  reel-ingest:
+    build: .
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - VAULT_RAW_DIR=/vault/raw
+      - INSTAGRAM_SUBDIR=${INSTAGRAM_SUBDIR}
+      - WHISPER_MODE=${WHISPER_MODE}
+      - WHISPER_MODEL=${WHISPER_MODEL}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE}
+      - WHISPER_API_KEY=${WHISPER_API_KEY}
+    volumes:
+      - ./scripts:/home/node/scripts
+      # Host path to your vault's raw/ folder -> mounted as /vault/raw in the container.
+      # Long syntax handles the space and drive-letter colon in the Windows path.
+      - type: bind
+        source: ${VAULT_HOST_PATH}
+        target: /vault/raw
+      # Persist downloaded Whisper models between container rebuilds
+      - whisper-cache:/home/node/.cache
+
+volumes:
+  whisper-cache:

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+yt-dlp
+faster-whisper
+rapidocr-onnxruntime
+openai
+python-dotenv

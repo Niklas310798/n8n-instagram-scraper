@@ -1,0 +1,21 @@
+n8n_data
+.DS_Store
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+*.log
+*.tmp
+.venv
+temp
+ignore.txt
+
