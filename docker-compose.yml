@@ -11,6 +11,8 @@ services:
       - WHISPER_MODEL=${WHISPER_MODEL}
       - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE}
       - WHISPER_API_KEY=${WHISPER_API_KEY}
+      - YOUTUBE_OCR=${YOUTUBE_OCR:-false}
+      - APIFY_API_TOKEN=${APIFY_API_TOKEN}
     volumes:
       - ./scripts:/home/node/scripts
       # Host path to your vault's raw/ folder -> mounted as /vault/raw in the container.

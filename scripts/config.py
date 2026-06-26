@@ -29,6 +29,8 @@ OPENAI_API_KEY = os.getenv("WHISPER_API_KEY")             # only needed when WHI
 # Source-specific settings
 # OCR on-screen text for YouTube too (off by default: long videos, low value)
 YOUTUBE_OCR = os.getenv("YOUTUBE_OCR", "false").lower() == "true"
+# Apify token: fallback for Instagram image posts / carousels (yt-dlp can't fetch them)
+APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
 
 # Make sure temp directory exists
 os.makedirs(TEMP_DIR, exist_ok=True)
