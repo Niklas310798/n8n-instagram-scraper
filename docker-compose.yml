@@ -21,5 +21,19 @@ services:
       # Persist downloaded Whisper models between container rebuilds
       - whisper-cache:/home/node/.cache
 
+  # ngrok runs in-container on purpose: container egress is not intercepted by
+  # the host's AV TLS scanning, and it now starts/stops with the project.
+  # Forwards the public domain to the (separately running) n8n on the host.
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command: ["http", "host.docker.internal:5678", "--url=${NGROK_DOMAIN}"]
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4040:4040"
+
 volumes:
   whisper-cache:
