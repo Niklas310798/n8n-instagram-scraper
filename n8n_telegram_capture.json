@@ -42,7 +42,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
-        "text": "={{ $json.success ? ('✅ ' + ({instagram:'Instagram',youtube:'YouTube'}[$json.source]||$json.source) + '-' + ({reel:'Reel',post:'Post',video:'Video'}[$json.kind]||'Inhalt') + ' gespeichert: ' + $json.file + '  ·  @' + $json.author + ($json.transcript_chars ? ('  ·  ' + $json.transcript_chars + ' Zeichen Transkript') : '') + ($json.ocr_blocks ? ('  ·  ' + $json.ocr_blocks + ' OCR-Block(e)') : '')) : ('⚠️ Fehler: ' + ($json.error && $json.error.message ? $json.error.message : JSON.stringify($json))) }}",
+        "text": "={{ $json.success ? ('✅ ' + ({instagram:'Instagram',youtube:'YouTube'}[$json.source]||$json.source) + '-' + ({reel:'Reel',post:'Post',video:'Video'}[$json.kind]||'Inhalt') + ' gespeichert: ' + $json.file + '  ·  @' + $json.author + ($json.transcript_chars ? ('  ·  ' + $json.transcript_chars + ' Zeichen Transkript') : '') + ($json.ocr_blocks ? ('  ·  ' + $json.ocr_blocks + ' OCR-Block(e)') : '')) : ($json.user_message || ('⚠️ Fehler: ' + ($json.error && $json.error.message ? $json.error.message : JSON.stringify($json)))) }}",
         "additionalFields": {}
       },
       "id": "33333333-3333-3333-3333-333333333333",

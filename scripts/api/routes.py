@@ -1,26 +1,42 @@
-from fastapi import APIRouter, HTTPException
+import os
+import threading
+
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from sources.registry import resolve
 from helpers.markdown import write_capture
+from errors import classify, IngestError
 
 router = APIRouter(tags=["ingest"])
+
+# Limit concurrent heavy ingests so a batch of links doesn't thrash the CPU
+# (Whisper/OCR) and blow past the caller's timeout.
+_SEM = threading.Semaphore(int(os.getenv("MAX_CONCURRENT_INGESTS", "2")))
 
 
 class IngestRequest(BaseModel):
     url: str
 
 
-# Two paths: /ingest (new, source-agnostic) and /n8n/ingest (kept for the
-# existing n8n workflow). Both run the same dispatch.
 @router.post("/ingest")
 @router.post("/n8n/ingest")
 def ingest(req: IngestRequest):
-    """Capture one URL (any supported source) as a raw/ document for the wiki."""
+    """Capture one URL (any supported source) as a raw/ document for the wiki.
+
+    Always returns HTTP 200; failures come back as {success:false, user_message}
+    so the Telegram reply can show a friendly message instead of a stack trace.
+    """
     try:
-        source = resolve(req.url)
-        cap = source.fetch(req.url)
-        path = write_capture(cap)
+        with _SEM:
+            source = resolve(req.url)
+            cap = source.fetch(req.url)
+            # Don't write hollow captures (nothing actually extracted).
+            if not (cap.caption.strip() or cap.transcript_text.strip() or cap.ocr_blocks):
+                raise IngestError(
+                    "not_found",
+                    "🚫 Für diesen Link konnten keine Inhalte extrahiert werden (privat, gelöscht oder Login nötig).")
+            path = write_capture(cap)
         kind = next((t for t in cap.tags if t in ("reel", "post", "video")), None)
         return {
             "success": True,
@@ -35,4 +51,10 @@ def ingest(req: IngestRequest):
             "ocr_blocks": len(cap.ocr_blocks),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        code, user_message, detail = classify(e)
+        return {
+            "success": False,
+            "error_code": code,
+            "user_message": user_message,
+            "detail": str(detail)[:500],
+        }
