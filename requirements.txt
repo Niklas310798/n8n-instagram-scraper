@@ -4,5 +4,6 @@ pydantic
 yt-dlp
 faster-whisper
 rapidocr-onnxruntime
+apify-client
 openai
 python-dotenv

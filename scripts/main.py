@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.instagram_routes import router as instagram_router
+from api.routes import router as ingest_router
 from config import TEMP_DIR, API_HOST, API_PORT
 import os
 
@@ -7,10 +7,10 @@ import os
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # Initialize FastAPI app
-app = FastAPI(title="Instagram Reel -> Wiki raw/ Capture")
+app = FastAPI(title="Content -> Wiki raw/ Capture")
 
 # Include routers
-app.include_router(instagram_router)
+app.include_router(ingest_router)
 
 
 @app.get("/health")

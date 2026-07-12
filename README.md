@@ -1,33 +1,36 @@
-# Instagram → Markdown Capture (Second-Brain Ingest)
+# Content → Markdown Capture (Second-Brain Ingest)
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-green)](https://fastapi.tiangolo.com)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Turn any Instagram reel or post into a clean, **LLM-optimized Markdown file** and drop it
-into your local knowledge vault (Obsidian, an LLM wiki, plain folder — anything file-based).
+Turn an **Instagram reel/post or YouTube video** into a clean, **LLM-optimized Markdown
+file** and drop it into your local knowledge vault (Obsidian, an LLM wiki, plain folder —
+anything file-based).
 
-It is built as a **capture adapter**: it extracts the content *faithfully* and leaves the
-summarizing, tagging and cross-linking to your downstream tool (e.g. an LLM that reads your
-vault). Send a link, get a source document — caption, on-screen text, and spoken transcript,
-grouped per creator.
+It is built around **pluggable source adapters**: one endpoint takes any supported URL,
+dispatches to the right adapter, and extracts the content *faithfully* — summarizing,
+tagging and cross-linking stay with your downstream tool (e.g. an LLM that reads your
+vault). Send a link, get a source document, grouped per creator. Adding a platform means
+adding **one file** under `sources/`.
 
-> Send a Telegram message with a reel link → a few seconds later a Markdown file appears in
-> `raw/instagram/<handle>/`, ready for your "second brain".
+> Send a Telegram message with a link → a Markdown file appears in
+> `raw/<source>/<handle>/`, ready for your "second brain".
 
 ## What it captures
 
-For each reel/post, one Markdown file with light YAML frontmatter and three content layers:
+One Markdown file per URL, with light YAML frontmatter and up to three content layers:
 
-| Layer | Source | How |
-|-------|--------|-----|
-| **Caption + metadata** | the post | yt-dlp (author, handle, date, likes/views, URL) |
-| **On-screen text** | video frames / carousel images | ffmpeg scene-change keyframes → RapidOCR (deduplicated) |
-| **Spoken transcript** | audio track | Whisper (local `faster-whisper`, or OpenAI API) |
+| Source | Content | How |
+|--------|---------|-----|
+| **Instagram reel/video** | caption + metadata, spoken transcript, on-screen text | yt-dlp → Whisper (`faster-whisper` local or OpenAI API) + ffmpeg scene-change keyframes → RapidOCR |
+| **Instagram image post / carousel** | caption + metadata, on-screen text of every slide | Apify fallback (yt-dlp can't fetch image posts) → RapidOCR |
+| **YouTube video** | description + chapters + metadata, transcript | yt-dlp; prefers existing subtitles (manual > auto), falls back to Whisper; OCR optional |
 
-Image-only posts skip the transcript; talking-head reels without on-screen text skip OCR.
-The downloaded media is processed and then deleted — only the Markdown is kept.
+Failures (login-walled, restricted, rate-limited, transient) come back as structured,
+user-friendly messages — ready to display in a bot reply. Media is processed and then
+deleted; only the Markdown is kept.
 
 ### Example output
 
@@ -59,14 +62,15 @@ tags: [instagram, reel, inbox]
 ## Architecture
 
 ```
-(optional) Telegram bot ──► n8n (via ngrok) ──► POST /n8n/ingest {url}
+(optional) Telegram bot ──► n8n (via ngrok) ──► POST /ingest {url}
                                                        │
-                       ┌──────────── FastAPI (Docker) ────────────┐
-                       │ 1. yt-dlp    → caption + metadata + media │
-                       │ 2. Whisper   → transcript                 │
-                       │ 3. ffmpeg+OCR → on-screen text            │
-                       │ 4. render Markdown                        │
-                       │ 5. write → <vault>/raw/instagram/<handle>/ │
+                       ┌──────────── FastAPI (Docker) ─────────────┐
+                       │ registry: URL ──► source adapter           │
+                       │   instagram: yt-dlp ▸ Apify fallback       │
+                       │   youtube:   subtitles ▸ Whisper fallback  │
+                       │ shared: Whisper · frames+OCR · errors      │
+                       │ render Capture → Markdown                  │
+                       │ write → <vault>/raw/<source>/<handle>/     │
                        └────────────────────────────────────────────┘
 ```
 
@@ -79,14 +83,19 @@ the HTTP endpoint directly from a script, a cron job, or any automation tool.
 scripts/
   main.py                  FastAPI app (+ /health)
   config.py                env-driven settings
-  api/instagram_routes.py  POST /n8n/ingest
+  errors.py                error classification → user-friendly messages
+  api/routes.py            POST /ingest (+ /n8n/ingest alias) — URL dispatch
+  sources/
+    base.py                Source interface + normalized Capture model
+    registry.py            URL → adapter resolution (register new sources here)
+    instagram.py           yt-dlp + Apify fallback (image posts, login walls)
+    youtube.py             subtitles-first, Whisper fallback, chapters
   helpers/
-    scrapper.py            yt-dlp: media + metadata
     transcribe.py          faster-whisper / OpenAI whisper
     frames.py              ffmpeg scene-change keyframes
     ocr.py                 RapidOCR on-screen text
     markdown.py            render + write the raw/ document
-Dockerfile / docker-compose.yml
+Dockerfile / docker-compose.yml   (includes optional ngrok service)
 requirements.txt
 .env.example
 n8n_telegram_capture.json  importable n8n workflow (Telegram trigger)
@@ -123,12 +132,14 @@ inside the container — nothing else to install.)
 Capture links from your phone by sending them to a Telegram bot.
 
 1. Create a bot with [@BotFather](https://t.me/botfather) and copy the token.
-2. Expose your n8n to the internet so Telegram can reach it (e.g. `ngrok http 5678`,
-   ideally with a static domain) and set n8n's `WEBHOOK_URL` to that public URL.
-3. In n8n, import `n8n_telegram_capture.json`, assign your Telegram credential to both
+2. Expose your n8n to the internet so Telegram can reach it. The compose file ships an
+   optional **ngrok service** (set `NGROK_AUTHTOKEN` + `NGROK_DOMAIN` in `.env`); set n8n's
+   `WEBHOOK_URL` to that public URL. Running ngrok in-container also dodges host antivirus
+   TLS interception.
+3. In n8n, import `n8n_telegram_capture.json`, assign your Telegram credential to the
    Telegram nodes, and activate the workflow.
-4. Send a reel link to your bot. The workflow:
-   `Telegram trigger → instant "processing…" reply → POST /n8n/ingest → "✅ saved" reply`.
+4. Send a link to your bot. The workflow:
+   `Telegram trigger → instant source-aware "processing…" reply → POST /ingest → "✅ saved" / friendly error reply`.
 
 > If n8n runs in Docker, it reaches the API container at `http://host.docker.internal:8000`.
 
@@ -142,20 +153,29 @@ Capture links from your phone by sending them to a Telegram bot.
 | `WHISPER_MODEL` | `base` | `tiny`/`base`/`small`/`medium`/`large-v3` |
 | `WHISPER_COMPUTE_TYPE` | `int8` | CTranslate2 compute type (`int8`, `float32`, …) |
 | `WHISPER_API_KEY` | – | OpenAI key, only when `WHISPER_MODE=API` |
+| `APIFY_API_TOKEN` | – | Enables the Instagram image-post/carousel fallback (reels work without it) |
+| `YOUTUBE_OCR` | `false` | Also OCR video frames for YouTube (slow on long videos) |
+| `MAX_CONCURRENT_INGESTS` | `2` | Parallel ingest limit (protects CPU on small hosts) |
+| `NGROK_AUTHTOKEN` / `NGROK_DOMAIN` | – | Only for the optional ngrok compose service |
 
 ## API
 
 | Endpoint | Method | Body | Description |
 |----------|--------|------|-------------|
-| `/n8n/ingest` | POST | `{"url": "<instagram-url>"}` | Capture one reel/post → write Markdown, return a summary |
+| `/ingest` (alias: `/n8n/ingest`) | POST | `{"url": "<instagram-or-youtube-url>"}` | Capture one URL → write Markdown, return a summary |
 | `/health` | GET | – | Liveness check |
+
+Responses are always HTTP 200 with a JSON body: on success `{success, file, source,
+kind, author, language, transcript_chars, caption_chars, ocr_blocks}`; on failure
+`{success: false, error_code, user_message, detail}` — `user_message` is safe to show
+directly to end users (e.g. as a bot reply).
 
 ## Roadmap
 
 - [ ] Strip tracking params (`?igsh=…`) from captured URLs
 - [ ] Account monitoring: scheduled batch capture of a creator's latest reels
-- [ ] Optional auto-ingest hook (trigger a downstream LLM after capture)
-- [ ] Lighter image / ARM build for Raspberry Pi
+- [ ] More sources: TikTok, podcasts/RSS, web articles (one adapter file each)
+- [x] ARM/Raspberry Pi support (runs on a Pi 5 with `WHISPER_MODEL=tiny`)
 - [ ] Better OCR cleanup (drop UI chrome, merge fragmented text)
 
 ## Contributing
