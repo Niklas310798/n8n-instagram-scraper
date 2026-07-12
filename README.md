@@ -95,11 +95,54 @@ scripts/
     frames.py              ffmpeg scene-change keyframes
     ocr.py                 RapidOCR on-screen text
     markdown.py            render + write the raw/ document
+  tools/                   host-side companion scripts (cron)
+    convert_pdfs.py        PDF drop-folder -> Markdown (pymupdf4llm)
+    saved_posts_capture.py saved IG posts -> /ingest (Instaloader session)
 Dockerfile / docker-compose.yml   (includes optional ngrok service)
 requirements.txt
 .env.example
 n8n_telegram_capture.json  importable n8n workflow (Telegram trigger)
 ```
+
+## The full pipeline (example deployment)
+
+How everything composes into a hands-off "second brain" feed — as deployed 24/7 on a
+Raspberry Pi 5, with the knowledge vault synced through a private Git repo and an LLM
+(Claude Code, headless) doing the nightly wiki work:
+
+```mermaid
+flowchart TB
+    subgraph CAP["📥 Capture — Raspberry Pi, 24/7"]
+        TG(["Telegram bot<br/>IG / YouTube link"]) -->|"webhook (ngrok)"| N8N["n8n workflow"]
+        N8N -->|"⏳ instant ack"| TG
+        N8N -->|"POST /ingest<br/>url + callback"| API["FastAPI capture service<br/>job queue → source adapters<br/>(yt-dlp · Apify · Whisper · OCR)"]
+        API -->|"result → webhook"| N8N
+        N8N -->|"✅ / ⚠️ reply"| TG
+        SAVED(["saved IG posts<br/>daily 21:15"]) -->|"new shortcodes"| API
+        PDFS(["PDF drop folder<br/>raw/pdf-inbox/"]) -->|"daily 02:30<br/>pymupdf4llm"| RAW
+        API -->|"Markdown"| RAW[("vault  raw/&lt;source&gt;/")]
+    end
+
+    RAW -->|"cron 5 min<br/>commit + push"| GH[("GitHub<br/>private vault repo")]
+
+    subgraph BRAIN["🧠 Wiki ingest — nightly 03:30"]
+        GH -->|pull| CLAUDE["Claude Code (headless)<br/>summarize · cross-link · index"]
+        CLAUDE -->|"wiki/ pages"| GH
+    end
+
+    GH <-->|"git pull / push"| LAP["💻 Laptop<br/>Obsidian + Claude Code sessions"]
+```
+
+| Workflow | Trigger | What happens |
+|---|---|---|
+| **Link capture** | Telegram message, anytime | ack in seconds → queued job → caption/transcript/OCR → `raw/` → ✅ reply via callback webhook |
+| **Saved-posts capture** | daily 21:15 | Instaloader lists your saved IG posts (login only for listing); new ones go through `/ingest`; Telegram summary |
+| **PDF capture** | daily 02:30 | PDFs dropped into `raw/pdf-inbox/` become frontmattered Markdown in `raw/pdf/` (original kept) |
+| **Vault sync** | every 5 min | new `raw/` files committed + pushed to the private vault repo |
+| **Wiki ingest** | daily 03:30 | headless Claude Code summarizes new sources into `wiki/`, cross-links, updates index + log |
+| **Working on it** | whenever | laptop pulls the vault, you browse in Obsidian / query via Claude Code, pushes flow back |
+
+Each piece is optional — the capture service works standalone via plain HTTP.
 
 ## Initial setup
 
