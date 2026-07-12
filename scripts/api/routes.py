@@ -1,11 +1,12 @@
+import json
 import os
 import threading
 import time
+import urllib.request
 import uuid
 from queue import Queue
 from typing import Any, Dict, Optional
 
-import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -75,7 +76,10 @@ def _run_job(job: Dict[str, Any]) -> None:
     if cb:
         for _attempt in range(3):
             try:
-                requests.post(cb, json=result, timeout=30)
+                req = urllib.request.Request(
+                    cb, data=json.dumps(result).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}, method="POST")
+                urllib.request.urlopen(req, timeout=30)
                 break
             except Exception:
                 time.sleep(5)

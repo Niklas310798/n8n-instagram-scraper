@@ -7,4 +7,3 @@ rapidocr-onnxruntime
 apify-client
 openai
 python-dotenv
-requests
