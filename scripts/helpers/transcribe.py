@@ -5,8 +5,24 @@ Two backends, switched via WHISPER_MODE:
   - API:   OpenAI whisper-1
 """
 import os
+import subprocess
 from typing import Any, Dict
 from config import WHISPER_MODE, WHISPER_MODEL, WHISPER_COMPUTE_TYPE, OPENAI_API_KEY
+
+_EMPTY = {"language": None, "text": "", "segments": []}
+
+
+def _has_audio(path: str) -> bool:
+    """True if the file contains at least one audio stream (ffprobe)."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "a",
+             "-show_entries", "stream=codec_type", "-of", "csv=p=0", path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+        )
+        return b"audio" in out.stdout
+    except Exception:
+        return True  # if probing fails, let the transcriber try (and error loudly)
 
 # Lazily-initialised local model so importing this module stays cheap.
 _local = None
@@ -24,6 +40,11 @@ def transcribe_audio(audio_path: str) -> Dict[str, Any]:
     """Return {language, text, segments:[{start,end,text}]} for an audio file."""
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+    # Silent videos (animations, text-only clips) have no audio stream at all —
+    # skip transcription instead of crashing inside the decoder.
+    if not _has_audio(audio_path):
+        return dict(_EMPTY)
 
     if WHISPER_MODE == "LOCAL":
         model = _local_model()
