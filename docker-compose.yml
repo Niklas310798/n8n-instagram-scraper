@@ -17,6 +17,12 @@ services:
     # Reach host services (n8n webhook callback) from inside the container
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # Shared external network with the n8n stack: n8n calls http://reel-ingest:8000
+    # and the callback goes to the n8n container by name (no host IP needed).
+    # Create once with: docker network create homelab
+    networks:
+      - default
+      - homelab
     volumes:
       - ./scripts:/home/node/scripts
       # Host path to your vault's raw/ folder -> mounted as /vault/raw in the container.
@@ -43,3 +49,7 @@ services:
 
 volumes:
   whisper-cache:
+
+networks:
+  homelab:
+    external: true
