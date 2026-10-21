@@ -184,7 +184,11 @@ Capture links from your phone by sending them to a Telegram bot.
 4. Send a link to your bot. The workflow:
    `Telegram trigger → instant source-aware "processing…" reply → POST /ingest → "✅ saved" / friendly error reply`.
 
-> If n8n runs in Docker, it reaches the API container at `http://host.docker.internal:8000`.
+> If n8n runs in Docker, put it and `reel-ingest` on the shared external network `homelab`
+> (`docker network create homelab`, then add the network to your n8n service). n8n then reaches
+> the API at `http://reel-ingest:8000`, and the callback URL in the workflow points at the n8n
+> container by name (`http://n8n_puppeteer:5678/webhook/ingest-done` in the template; adjust it to
+> your n8n container name).
 
 ## Configuration
 

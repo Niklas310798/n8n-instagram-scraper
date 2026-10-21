@@ -21,10 +21,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://192.168.178.36:8000/n8n/ingest",
+        "url": "http://reel-ingest:8000/n8n/ingest",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ url: ($('Telegram Trigger').item.json.message.text.match(/https?:\\/\\/\\S+/) || [$('Telegram Trigger').item.json.message.text])[0].trim(), callback_url: 'http://host.docker.internal:5678/webhook/ingest-done', meta: { chat_id: $('Telegram Trigger').item.json.message.chat.id } }) }}",
+        "jsonBody": "={{ JSON.stringify({ url: ($('Telegram Trigger').item.json.message.text.match(/https?:\\/\\/\\S+/) || [$('Telegram Trigger').item.json.message.text])[0].trim(), callback_url: 'http://n8n_puppeteer:5678/webhook/ingest-done', meta: { chat_id: $('Telegram Trigger').item.json.message.chat.id } }) }}",
         "options": {
           "timeout": 30000
         }
